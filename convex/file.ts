@@ -3,6 +3,15 @@ import { ConvexError, v } from "convex/values";
 import { getUser } from "./users";
 
 
+
+export const generateUploadUrl = mutation(async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    console.log(identity)
+    if (!identity) throw new ConvexError("You must be signed in to create a task");
+    return await ctx.storage.generateUploadUrl();
+});
+
+
 async function hasAccessToOrg(
     ctx: QueryCtx | MutationCtx,
     orgId: string,
@@ -17,7 +26,11 @@ async function hasAccessToOrg(
 
 // Create a new task with the given text, into database
 export const createTask = mutation({
-    args: { name: v.string(), orgId: v.string() },
+    args: {
+        name: v.string(),
+        fileId: v.id("_storage"),
+        orgId: v.string(),
+    },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
         console.log(identity)
@@ -28,7 +41,11 @@ export const createTask = mutation({
         );
         if (!hasAccess) throw new ConvexError("You don't have access to this organization");
         const newTaskId = await ctx.db.insert("files",
-            { text: args.name, orgId: args.orgId }
+            {
+                name: args.name,
+                fileId: args.fileId,
+                orgId: args.orgId
+            }
         );
         return newTaskId;
     },
@@ -45,7 +62,8 @@ export const getFiles = query({
             ctx, args.orgId,
             identity.tokenIdentifier
         );
-        if (!hasAccess) return []
+
+        if (!identity) return []
         return await ctx.db.query('files').withIndex('by_orgId', q => q.eq('orgId', args.orgId)).collect();
 
 
